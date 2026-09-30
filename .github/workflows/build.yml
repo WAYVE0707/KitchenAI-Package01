@@ -1,33 +1,68 @@
-name: Build KitchenAI
+name: Build KitchenAI Package 01
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  test:
+  build:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check files
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
         shell: pwsh
         run: |
-          Write-Host "KitchenAI build started"
-          Get-ChildItem -Recurse | Select-Object FullName
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-      - name: Create test package
+      - name: Run smoke tests
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist
-          "KitchenAI Package 01" | Out-File dist\KitchenAI_Package_01.txt
+          python tests/smoke_test.py
 
-      - name: Upload artifact
+      - name: Build KitchenAI.exe
+        shell: pwsh
+        run: |
+          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
+          if (Test-Path build/pyinstaller) { Remove-Item -Recurse -Force build/pyinstaller }
+
+          pyinstaller --noconfirm --clean --onefile --windowed \`
+            --name KitchenAI \`
+            src/app.py
+
+          if (!(Test-Path "dist/KitchenAI.exe")) {
+            throw "KitchenAI.exe was not created."
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Build KitchenAI_Setup.exe
+        shell: pwsh
+        run: |
+          & "\${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\KitchenAI.iss"
+
+          if (!(Test-Path "dist/KitchenAI_Setup.exe")) {
+            throw "KitchenAI_Setup.exe was not created."
+          }
+
+      - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: KitchenAI-Package-01
-          path: dist
+          name: KitchenAI-Package-01-Windows
+          path: |
+            dist/KitchenAI.exe
+            dist/KitchenAI_Setup.exe
+          if-no-files-found: error
