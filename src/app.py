@@ -174,11 +174,13 @@ class OllamaClient:
     def tags(self):
         return self._request("/api/tags", timeout=10).get("models", [])
 
-    def chat(self, model, messages, images=None):
+    def chat(self, model, messages, images=None, options=None):
         msgs = copy.deepcopy(messages)
         if images and msgs:
             msgs[-1]["images"] = images
         payload = {"model": model, "messages": msgs, "stream": False}
+        if options:
+            payload["options"] = options
         return self._request("/api/chat", payload, timeout=600).get("message", {}).get("content", "")
 
 
@@ -281,10 +283,11 @@ class App(tk.Tk):
         self.models = []
         self.model_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="Готово")
-        self.profile_var = tk.StringVar(value="Standard")
+        self.profile_var = tk.StringVar(value="Lite")
         self._setup_style()
         self._build_ui()
         self._load_or_create()
+        # Low-end-safe default; the user can switch to Standard/Pro on stronger PCs.
         self.after(250, self.refresh_ollama)
 
     def _setup_style(self):
@@ -477,7 +480,19 @@ class App(tk.Tk):
                     p = self.store.path_for(self.project) / ref["path"]
                     if p.exists() and p.stat().st_size < 8_000_000:
                         images.append(base64.b64encode(p.read_bytes()).decode("ascii"))
-            reply = self.client.chat(model, messages, images=images or None)
+            # The Lite profile is intended for low-end office PCs such as
+            # i3-9100F + 8 GB RAM + GT 1030 2 GB. Force CPU inference
+            # to avoid CUDA/PTX runner crashes and keep the GPU free.
+            options = None
+            if self.profile_var.get() == "Lite":
+                options = {
+                    "num_gpu": 0,
+                    "num_ctx": 2048,
+                    "num_batch": 32,
+                    "num_thread": 4
+                }
+
+            reply = self.client.chat(model, messages, images=images or None, options=options)
             changes, clean = parse_patch(reply)
             self.after(0, lambda: self._chat_done(clean, changes))
         except Exception as e:
