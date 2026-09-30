@@ -24,6 +24,7 @@ except ImportError:
 
 APP_NAME = "Kitchen AI Designer"
 APP_VERSION = "1.0.0-package01"
+RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 OLLAMA_URL = os.environ.get("KITCHENAI_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 
 
