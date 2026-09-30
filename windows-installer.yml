@@ -1,0 +1,35 @@
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        shell: powershell
+        run: |
+          py -3 -m pip install --upgrade pip
+          py -3 -m pip install -r requirements.txt pyinstaller
+      - name: Build application
+        shell: powershell
+        run: |
+          py -3 -m PyInstaller --noconfirm --clean --onefile --windowed --name KitchenAI src\app.py
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: powershell
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\KitchenAI.iss'
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: KitchenAI-Windows
+          path: dist\KitchenAI_Setup.exe
