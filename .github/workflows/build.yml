@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
@@ -34,25 +34,56 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path dist) { Remove-Item -Recurse -Force dist }
-          if (Test-Path build\KitchenAI) { Remove-Item -Recurse -Force build\KitchenAI }
-          pyinstaller --noconfirm --clean --onefile --windowed --name KitchenAI src\app.py
-          if (!(Test-Path "dist\KitchenAI.exe")) { throw "KitchenAI.exe was not created." }
+          if (Test-Path build/KitchenAI) { Remove-Item -Recurse -Force build/KitchenAI }
+
+          pyinstaller --noconfirm --clean --onefile --windowed \`
+            --name KitchenAI \`
+            src/app.py
+
+          if (!(Test-Path "dist/KitchenAI.exe")) {
+            throw "KitchenAI.exe was not created."
+          }
 
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup -y --no-progress
+        run: |
+          choco install innosetup -y --no-progress
 
-      - name: Build installer
+      - name: Find Inno Setup compiler
         shell: pwsh
         run: |
-          & "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe" "installer\KitchenAI.iss"
-          if (!(Test-Path "dist\KitchenAI_Setup.exe")) { throw "KitchenAI_Setup.exe was not created." }
+          $candidates = @(
+            (Join-Path \${env:ProgramFiles} "Inno Setup 6\ISCC.exe"),
+            (Join-Path \${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe")
+          )
 
-      - name: Upload artifacts
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if (-not $iscc) {
+            $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          }
+
+          if (-not $iscc) {
+            throw "ISCC.exe (Inno Setup Compiler) was not found."
+          }
+
+          "ISCC_PATH=$iscc" >> $env:GITHUB_ENV
+          Write-Host "Using Inno Setup compiler: $iscc"
+
+      - name: Build KitchenAI_Setup.exe
+        shell: pwsh
+        run: |
+          & "$env:ISCC_PATH" "installer\KitchenAI.iss"
+
+          if (!(Test-Path "dist\KitchenAI_Setup.exe")) {
+            throw "KitchenAI_Setup.exe was not created."
+          }
+
+      - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:
           name: KitchenAI-Package-01-Windows
           path: |
-            dist\KitchenAI.exe
-            dist\KitchenAI_Setup.exe
+            dist/KitchenAI.exe
+            dist/KitchenAI_Setup.exe
           if-no-files-found: error
