@@ -27,31 +27,42 @@ jobs:
 
       - name: Run smoke tests
         shell: pwsh
-        run: |
-          python tests/smoke_test.py
+        run: python tests/smoke_test.py
 
       - name: Build KitchenAI.exe
         shell: pwsh
         run: |
           if (Test-Path dist) { Remove-Item -Recurse -Force dist }
-          if (Test-Path build/pyinstaller) { Remove-Item -Recurse -Force build/pyinstaller }
+          if (Test-Path build\KitchenAI) { Remove-Item -Recurse -Force build\KitchenAI }
+
           pyinstaller --noconfirm --clean --onefile --windowed `
             --name KitchenAI `
-            src/app.py
-          if (!(Test-Path "dist/KitchenAI.exe")) {
+            --add-data "config;config" `
+            src\app.py
+
+          if (!(Test-Path "dist\KitchenAI.exe")) {
             throw "KitchenAI.exe was not created."
           }
 
       - name: Install Inno Setup
         shell: pwsh
-        run: |
-          choco install innosetup -y --no-progress
+        run: choco install innosetup -y --no-progress
 
       - name: Build KitchenAI_Setup.exe
         shell: pwsh
         run: |
-          & "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe" "installer\KitchenAI.iss"
-          if (!(Test-Path "dist/KitchenAI_Setup.exe")) {
+          $pf86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+          $candidates = @(
+            (Join-Path $pf86 "Inno Setup 6\ISCC.exe"),
+            (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+            "C:\ProgramData\chocolatey\bin\ISCC.exe"
+          )
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found after Inno Setup installation." }
+
+          & $iscc "installer\KitchenAI.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
+          if (!(Test-Path "dist\KitchenAI_Setup.exe")) {
             throw "KitchenAI_Setup.exe was not created."
           }
 
@@ -60,6 +71,6 @@ jobs:
         with:
           name: KitchenAI-Package-01-Windows
           path: |
-            dist/KitchenAI.exe
-            dist/KitchenAI_Setup.exe
+            dist\KitchenAI.exe
+            dist\KitchenAI_Setup.exe
           if-no-files-found: error
