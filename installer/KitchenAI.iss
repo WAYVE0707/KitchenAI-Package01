@@ -4,7 +4,7 @@
 #define MyAppExeName "KitchenAI.exe"
 
 [Setup]
-AppId={{D54DF7C4-8B77-4B55-BE4D-KITCHENAI0001}
+AppId={{D54DF7C4-8B77-4B55-BE4D-000000000001}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
